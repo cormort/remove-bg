@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧影像工具 v11.3 (預設去背模式)</title>
+    <style>
+        :root { --bg: #1e1e2e; --panel: #2b2b3d; --accent: #e67e22; --text: #eceff4; --border: #444; --secondary-btn: #555; --blue-btn: #3498db; }
+        body { font-family: "Segoe UI", sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; min-height: 100vh; }
+        h2 { border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-bottom: 20px; }
+        
+        .main-layout { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+        .controls { background: var(--panel); padding: 20px; border-radius: 8px; border: 1px solid var(--border); position: sticky; top: 20px; height: fit-content; }
+        
+        .control-group { margin-bottom: 20px; border-bottom: 1px solid #444; padding-bottom: 15px; }
+        .control-group:last-child { border-bottom: none; }
+        .control-group.hidden { display: none; }
+        .hidden { display: none !important; } /* 強制隱藏輔助類 */
+
+        .control-header { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #bbb; font-weight: 600; }
+        .control-val { color: var(--accent); }
+        .sub-label { font-size: 0.8rem; color: #888; margin-top: 4px; display: block; }
+        
+        input[type="range"] { width: 100%; cursor: pointer; accent-color: var(--accent); }
+        
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; cursor: pointer; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; }
+        .toggle-row input { margin-right: 10px; transform: scale(1.2); cursor: pointer; }
+
+        /* Radio Group Style */
+        .radio-group { display: flex; flex-direction: column; gap: 8px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 4px; margin-top: 10px;}
+        .radio-item { display: flex; align-items: center; cursor: pointer; font-size: 0.9rem; }
+        .radio-item input { margin-right: 8px; accent-color: var(--accent); transform: scale(1.1); }
+        
+        .btn { background: var(--accent); color: #fff; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; transition: 0.2s; font-size: 1rem; }
+        .btn:hover { filter: brightness(1.1); }
+        .btn.secondary { background: #555; }
+        .btn.blue { background: var(--blue-btn); }
+        
+        input[type="file"] { display: none; }
+
+        /* Tabs */
+        .tab-container { display: flex; gap: 10px; margin-bottom: 15px; }
+        .tab-btn { flex: 1; padding: 10px; background: var(--panel); border: 1px solid var(--border); color: #888; cursor: pointer; border-radius: 8px 8px 0 0; font-weight: bold; transition: 0.3s; }
+        .tab-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+        .tab-btn:hover:not(.active) { background: #333; }
+
+        /* Display Areas */
+        .display-area { 
+            background: var(--panel);
+            min-height: 60vh; 
+            border: 2px dashed #444; border-radius: 0 8px 8px 8px; padding: 20px; position: relative; 
+            transition: border-color 0.3s, box-shadow 0.3s;
+            outline: none;
+        }
+        .display-area:focus { border-color: var(--accent); box-shadow: 0 0 10px rgba(230, 126, 34, 0.3); }
+        .display-area.dragover { border-color: var(--accent); background: rgba(230, 126, 34, 0.1); }
+        
+        /* Brush Grid Styles */
+        .brush-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px; }
+        .brush-card { background: #222; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+        .checker-bg { background-image: linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc), linear-gradient(45deg, #ccc 25%, transparent 25%, transparent 75%, #ccc 75%, #ccc); background-size: 20px 20px; background-color: #fff; }
+        .brush-preview { height: 200px; padding: 20px; display: flex; align-items: center; justify-content: center; }
+        .brush-preview svg, .brush-preview img { width: 100%; height: 100%; object-fit: contain; overflow: visible; }
+        .brush-info { padding: 12px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); }
+        .brush-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .brush-actions button { padding: 8px 4px; font-size: 0.8rem; cursor: pointer; border: none; border-radius: 4px; background: var(--accent); color: white; font-weight: bold;}
+        .brush-actions button.raw-btn { background: var(--secondary-btn); color: #ddd; font-weight: normal;}
+        
+        /* Full Image View Styles */
+        .full-view-container { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; height: 100%; }
+        .full-canvas-wrapper { max-width: 100%; max-height: 60vh; overflow: auto; border: 1px solid #666; margin-bottom: 20px; }
+        #fullPreviewCanvas { display: block; max-width: 100%; }
+
+        .empty-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #666; pointer-events: none; }
+        .badge { font-size: 0.7rem; background: #222; padding: 2px 6px; border-radius: 4px; color: #aaa; margin-left: 5px; }
+
+        #pasteIndicator {
+            position: fixed; top: 20px; right: 20px; background: var(--success); color: white;
+            padding: 10px 20px; border-radius: 4px; font-weight: bold; opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 100;
+        }
+        :root { --success: #2ecc71; }
+    </style>
+</head>
+<body>
+
+    <h2>🧬 智慧影像工具 v11.3 (預設去背模式)</h2>
+    <div id="pasteIndicator">已偵測到圖片貼上！</div>
+
+    <div class="main-layout">
+        <div class="controls">
+            <button class="btn" onclick="document.getElementById('fileInput').click()">📂 上傳圖片</button>
+            <input type="file" id="fileInput" accept="image/*">
+            
+            <div style="border-bottom:1px solid #444; margin:15px 0;"></div>
+
+            <div class="control-group">
+                <div class="control-header">1. 基礎處理</div>
+                <div style="margin-bottom:15px;">
+                    <div class="control-header"><span>對比度</span><span class="control-val" id="contrastVal">0</span></div>
+                    <input type="range" id="contrast" min="-100" max="100" value="0">
+                    <small class="sub-label">增強黑白分明</small>
+                </div>
+                
+                <label class="toggle-row">
+                    <span>啟用自動去背</span>
+                    <input type="checkbox" id="autoAlpha" checked>
+                </label>
+
+                <div id="alphaOptions" style="margin-top: 10px; padding-left: 10px; border-left: 2px solid #555;">
+                    <div class="control-header" style="margin-top:10px;">去背演算法</div>
+                    <div class="radio-group">
+                        <label class="radio-item">
+                            <input type="radio" name="algo" value="global" onclick="reprocess()">
+                            <div>
+                                <strong>全域濾除 (Global)</strong>
+                                <small style="display:block; color:#888;">看到白色就刪 (適合單純黑白稿)</small>
+                            </div>
+                        </label>
+                        <label class="radio-item">
+                            <input type="radio" name="algo" value="flood" checked onclick="reprocess()">
+                            <div>
+                                <strong>智慧邊緣 (Edge Fill)</strong>
+                                <small style="display:block; color:#888;">保留封閉區域內的顏色</small>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div style="margin-top:15px;">
+                        <div class="control-header"><span>容許度 (Tolerance)</span><span class="control-val" id="bgThreshVal">20</span></div>
+                        <input type="range" id="bgThreshold" min="1" max="100" value="20">
+                        <small class="sub-label">數值越低越嚴格 (只刪除很接近背景的顏色)</small>
+                    </div>
+                    
+                    <label class="toggle-row" style="background:transparent; padding:0; margin-top:10px;">
+                        <span>保留原色 (彩色模式)</span>
+                        <input type="checkbox" id="keepColor" checked>
+                    </label>
+                </div>
+            </div>
+
+            <div id="brushControls" class="control-group hidden">
+                <div class="control-group">
+                    <div class="control-header">2. 向量化 (筆刷模式)</div>
+                    <div style="margin-bottom:15px;">
+                        <div class="control-header"><span>平滑度</span><span class="control-val" id="smoothVal">3</span></div>
+                        <input type="range" id="smoothness" min="0" max="10" value="3">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">3. 分割 (筆刷模式)</div>
+                    <label class="toggle-row">
+                        <span>自動切割筆刷</span>
+                        <input type="checkbox" id="autoSplit">
+                    </label>
+                    <div style="margin-top:10px; opacity: 0.6;" id="splitParams">
+                        <div class="control-header"><span>間距 (Gap)</span><span class="control-val" id="gapVal">2</span></div>
+                        <input type="range" id="gapTolerance" min="1" max="20" value="2">
+                    </div>
+                </div>
+            </div>
+
+            <div id="fullImageControls" class="control-group">
+                 <div class="control-header">2. 輸出選項</div>
+                 <p style="color:#aaa; font-size:0.9rem;">
+                    💡 <strong>智慧邊緣</strong>：從外部往內尋找背景，遇到線條會停住，保護內部色彩。<br>
+                    💡 若邊緣有雜邊，請嘗試調低「容許度」。
+                 </p>
+            </div>
+
+            <button class="btn secondary" onclick="reprocess()">⚡ 重新運算</button>
+        </div>
+
+        <div style="display:flex; flex-direction:column;">
+            <div class="tab-container">
+                <button class="tab-btn" onclick="switchMode('brush')" id="tabBrush">🎨 筆刷採集模式</button>
+                <button class="tab-btn active" onclick="switchMode('full')" id="tabFull">🖼️ 純去背模式</button>
+            </div>
+
+            <div class="display-area" id="galleryArea" tabindex="0">
+                <div class="empty-hint" id="emptyHint">
+                    <p>👇 <strong>點擊區域</strong> 後按 <strong>Ctrl+V</strong></p>
+                    <small>或是拖曳圖片上傳</small>
+                </div>
+                
+                <div class="brush-grid" id="gallery" style="display:none;"></div>
+                
+                <div class="full-view-container" id="fullView">
+                    <div class="full-canvas-wrapper checker-bg">
+                        <canvas id="fullPreviewCanvas"></canvas>
+                    </div>
+                    <button class="btn blue" style="max-width:300px;" onclick="downloadFullImage()">💾 下載去背 PNG (全圖)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="processCanvas" style="display:none;"></canvas>
+
+    <script>
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const processCanvas = document.getElementById('processCanvas');
+        const ctx = processCanvas.getContext('2d', { willReadFrequently: true });
+        
+        const galleryArea = document.getElementById('galleryArea');
+        const gallery = document.getElementById('gallery');
+        const fullView = document.getElementById('fullView');
+        const fullPreviewCanvas = document.getElementById('fullPreviewCanvas');
+        const emptyHint = document.getElementById('emptyHint');
+        const pasteIndicator = document.getElementById('pasteIndicator');
+
+        // Controls
+        const brushControls = document.getElementById('brushControls');
+        const fullImageControls = document.getElementById('fullImageControls');
+        const contrastInput = document.getElementById('contrast');
+        const autoAlphaCheck = document.getElementById('autoAlpha');
+        const keepColorCheck = document.getElementById('keepColor');
+        const bgThresholdInput = document.getElementById('bgThreshold');
+        const alphaOptions = document.getElementById('alphaOptions');
+        const algoRadios = document.getElementsByName('algo');
+        
+        const smoothInput = document.getElementById('smoothness');
+        const autoSplitCheck = document.getElementById('autoSplit');
+        const gapInput = document.getElementById('gapTolerance');
+        const splitParams = document.getElementById('splitParams');
+
+        const tabBrush = document.getElementById('tabBrush');
+        const tabFull = document.getElementById('tabFull');
+
+        let originalImg = null;
+        let currentMode = 'full'; // 預設模式改為 'full'
+
+        // Init UI Events
+        contrastInput.oninput = (e) => { document.getElementById('contrastVal').innerText = e.target.value; reprocess(); }; 
+        bgThresholdInput.oninput = (e) => { document.getElementById('bgThreshVal').innerText = e.target.value; reprocess(); };
+        smoothInput.oninput = (e) => document.getElementById('smoothVal').innerText = e.target.value;
+        gapInput.oninput = (e) => document.getElementById('gapVal').innerText = e.target.value;
+        
+        autoAlphaCheck.onchange = () => {
+            alphaOptions.style.opacity = autoAlphaCheck.checked ? '1' : '0.3';
+            alphaOptions.style.pointerEvents = autoAlphaCheck.checked ? 'auto' : 'none';
+            reprocess();
+        };
+        keepColorCheck.onchange = reprocess;
+        autoSplitCheck.onchange = () => {
+            splitParams.style.opacity = autoSplitCheck.checked ? '1' : '0.4';
+        };
+
+        // File & Paste
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        document.addEventListener('paste', handlePaste);
+        galleryArea.addEventListener('paste', handlePaste);
+        galleryArea.addEventListener('dragover', (e) => { e.preventDefault(); galleryArea.classList.add('dragover'); });
+        galleryArea.addEventListener('dragleave', () => galleryArea.classList.remove('dragover'));
+        galleryArea.addEventListener('drop', (e) => { 
+            e.preventDefault(); 
+            galleryArea.classList.remove('dragover'); 
+            if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); 
+        });
+
+        function switchMode(mode) {
+            currentMode = mode;
+            if (mode === 'brush') {
+                tabBrush.classList.add('active'); tabFull.classList.remove('active');
+                gallery.style.display = 'grid'; fullView.style.display = 'none';
+                brushControls.classList.remove('hidden'); fullImageControls.classList.add('hidden');
+                // 切換到筆刷模式時，如果是新圖片，預設關閉保留原色(轉黑)
+                if(!originalImg) keepColorCheck.checked = false; 
+            } else {
+                tabBrush.classList.remove('active'); tabFull.classList.add('active');
+                gallery.style.display = 'none'; fullView.style.display = 'flex';
+                brushControls.classList.add('hidden'); fullImageControls.classList.remove('hidden');
+                // 切換到全圖模式時，預設開啟保留原色
+                if(!originalImg) keepColorCheck.checked = true;
+            }
+            if (originalImg) reprocess();
+        }
+
+        function handlePaste(e) {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let blob = null;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) { blob = items[i].getAsFile(); break; }
+            }
+            if (blob) { e.preventDefault(); showPasteSuccess(); handleFile(blob); }
+        }
+
+        function showPasteSuccess() { pasteIndicator.style.opacity = '1'; setTimeout(() => { pasteIndicator.style.opacity = '0'; }, 2000); }
+
+        function handleFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => { originalImg = img; emptyHint.style.display='none'; reprocess(); };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function reprocess() {
+            if (!originalImg) return;
+
+            processCanvas.width = originalImg.width; processCanvas.height = originalImg.height;
+            ctx.drawImage(originalImg, 0, 0);
+            const imageData = ctx.getImageData(0, 0, processCanvas.width, processCanvas.height);
+            const data = imageData.data;
+            
+            // 1. Contrast Adjustment (Global)
+            const contrast = parseInt(contrastInput.value);
+            if (contrast !== 0) {
+                const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i] = factor * (data[i] - 128) + 128;
+                    data[i+1] = factor * (data[i+1] - 128) + 128;
+                    data[i+2] = factor * (data[i+2] - 128) + 128;
+                }
+            }
+
+            // 2. Alpha Processing
+            if (autoAlphaCheck.checked) {
+                const isFlood = document.querySelector('input[name="algo"]:checked').value === 'flood';
+                const tolerance = parseInt(bgThresholdInput.value);
+                
+                if (isFlood) {
+                    floodFillBackground(imageData, tolerance);
+                } else {
+                    const thresh = 255 - tolerance * 2; 
+                    for (let i = 0; i < data.length; i += 4) {
+                        const avg = (data[i] + data[i+1] + data[i+2]) / 3;
+                        if (avg > thresh) {
+                            data[i+3] = 0;
+                        }
+                    }
+                }
+
+                if (!keepColorCheck.checked) {
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i+3] > 0) { 
+                             data[i] = 0; data[i+1] = 0; data[i+2] = 0;
+                        }
+                    }
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+
+            if (currentMode === 'brush') {
+                renderBrushMode(imageData);
+            } else {
+                renderFullMode();
+            }
+        }
+
+        function floodFillBackground(imageData, tolerance) {
+            const data = imageData.data;
+            const w = imageData.width;
+            const h = imageData.height;
+            const stack = [];
+            const visited = new Uint8Array(w * h);
+
+            const bgR = data[0], bgG = data[1], bgB = data[2];
+            const seeds = [[0,0], [w-1, 0], [0, h-1], [w-1, h-1]];
+            
+            seeds.forEach(pt => {
+                const x = pt[0], y = pt[1];
+                const idx = (y * w + x) * 4;
+                if (colorMatch(data, idx, bgR, bgG, bgB, tolerance)) {
+                    stack.push(x, y);
+                    visited[y * w + x] = 1;
+                    data[idx + 3] = 0; 
+                }
+            });
+
+            while (stack.length > 0) {
+                const y = stack.pop();
+                const x = stack.pop();
+                const neighbors = [x + 1, y, x - 1, y, x, y + 1, x, y - 1];
+
+                for (let i = 0; i < neighbors.length; i += 2) {
+                    const nx = neighbors[i], ny = neighbors[i + 1];
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                        const nOffset = ny * w + nx;
+                        if (visited[nOffset] === 0) {
+                            const idx = nOffset * 4;
+                            if (colorMatch(data, idx, bgR, bgG, bgB, tolerance)) {
+                                visited[nOffset] = 1;
+                                data[idx + 3] = 0; 
+                                stack.push(nx, ny);
+                            } else {
+                                visited[nOffset] = 1; 
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function colorMatch(data, idx, r, g, b, tol) {
+            const diff = Math.abs(data[idx] - r) + Math.abs(data[idx+1] - g) + Math.abs(data[idx+2] - b);
+            return diff < (tol * 3); 
+        }
+
+        function renderBrushMode(imageData) {
+            gallery.innerHTML = '';
+            setTimeout(() => {
+                let blobs = [];
+                if (autoSplitCheck.checked) {
+                    blobs = segmentBrushes(imageData, processCanvas.width, processCanvas.height);
+                } else {
+                    const bbox = getContentBoundingBox(imageData, processCanvas.width, processCanvas.height);
+                    if (bbox) blobs.push(bbox);
+                }
+
+                if (blobs.length === 0) {
+                    gallery.innerHTML = '<div style="color:#e74c3c; grid-column:1/-1; text-align:center; padding:20px;">未偵測到墨跡內容。</div>';
+                    return;
+                }
+
+                blobs.forEach((blob, index) => {
+                    const brushCanvas = document.createElement('canvas');
+                    brushCanvas.width = blob.width; brushCanvas.height = blob.height;
+                    const bCtx = brushCanvas.getContext('2d');
+                    bCtx.putImageData(imageData, -blob.x, -blob.y, blob.x, blob.y, blob.width, blob.height);
+                    
+                    const points = traceContour(bCtx.getImageData(0,0,blob.width,blob.height));
+                    const rawSvgCode = `<svg viewBox="0 0 ${blob.width} ${blob.height}" xmlns="http://www.w3.org/2000/svg"><path d="${pointsToSVGPath(points)}" fill="black"/></svg>`;
+                    const smoothPoints = smoothPath(points, parseInt(smoothInput.value));
+                    const smoothSvgCode = `<svg viewBox="0 0 ${blob.width} ${blob.height}" xmlns="http://www.w3.org/2000/svg"><path d="${pointsToSVGPath(smoothPoints)}" fill="black"/></svg>`;
+
+                    const card = document.createElement('div');
+                    card.className = 'brush-card';
+                    card.innerHTML = `
+                        <div class="brush-preview checker-bg">${smoothSvgCode}</div>
+                        <div class="brush-info">
+                            <div class="brush-actions">
+                                <button class="raw-btn" onclick="downloadText('${encodeURIComponent(rawSvgCode)}', 'brush_${index+1}_raw.svg')">Raw SVG</button>
+                                <button onclick="downloadText('${encodeURIComponent(smoothSvgCode)}', 'brush_${index+1}_smooth.svg')">Smooth SVG</button>
+                                <button onclick="downloadFile('${brushCanvas.toDataURL()}', 'brush_${index+1}.png')">PNG</button>
+                            </div>
+                        </div>`;
+                    gallery.appendChild(card);
+                });
+            }, 10);
+        }
+
+        function renderFullMode() {
+            fullPreviewCanvas.width = processCanvas.width;
+            fullPreviewCanvas.height = processCanvas.height;
+            const fCtx = fullPreviewCanvas.getContext('2d');
+            fCtx.drawImage(processCanvas, 0, 0);
+        }
+
+        function downloadFullImage() {
+            if (!originalImg) return;
+            downloadFile(fullPreviewCanvas.toDataURL(), 'processed_smart_edge.png');
+        }
+
+        // --- Helper Algos ---
+        function getContentBoundingBox(imageData, w, h) { const data = imageData.data; let minX = w, maxX = 0, minY = h, maxY = 0, found = false; for (let y = 0; y < h; y++) { for (let x = 0; x < w; x++) { if (data[(y * w + x) * 4 + 3] > 20) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; found = true; }}} return found ? { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } : null; }
+        function segmentBrushes(imageData, w, h) { const data = imageData.data; const visited = new Uint8Array(w * h); const blobs = []; const threshold = 50; const gap = parseInt(gapInput.value); for (let y = 0; y < h; y+=2) { for (let x = 0; x < w; x+=2) { const idx = y * w + x; if (data[idx * 4 + 3] > threshold && visited[idx] === 0) { const blob = floodFill(data, visited, w, h, x, y, threshold); if (blob.width > 10 && blob.height > 10) blobs.push(blob); }}} return blobs; }
+        function floodFill(data, visited, w, h, startX, startY, threshold) { const queue = [startX, startY]; let minX = startX, maxX = startX, minY = startY, maxY = startY; visited[startY * w + startX] = 1; while (queue.length > 0) { const cy = queue.pop(); const cx = queue.pop(); if (cx < minX) minX = cx; if (cx > maxX) maxX = cx; if (cy < minY) minY = cy; if (cy > maxY) maxY = cy; const neighbors = [cx+1,cy, cx-1,cy, cx,cy+1, cx,cy-1]; for (let i = 0; i < neighbors.length; i += 2) { const nx = neighbors[i], ny = neighbors[i+1]; if (nx >= 0 && nx < w && ny >= 0 && ny < h) { const nIdx = ny * w + nx; if (visited[nIdx] === 0 && data[nIdx * 4 + 3] > threshold) { visited[nIdx] = 1; queue.push(nx, ny); }}}} return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 }; }
+        function traceContour(imgData) { const w=imgData.width,h=imgData.height,d=imgData.data; const t=128; const l=[],r=[]; for(let y=0;y<h;y+=2){let mx=-1,Mx=-1; for(let x=0;x<w;x++){if(d[(y*w+x)*4+3]>t){if(mx===-1)mx=x;Mx=x;}} if(mx!==-1){l.push({x:mx,y:y});r.push({x:Mx,y:y});}} return [...l,...r.reverse()]; }
+        function smoothPath(p,it){if(it===0||p.length<3)return p;let cp=p;for(let i=0;i<it;i++){const np=[];const l=cp.length;for(let j=0;j<l;j++){const pv=cp[(j-1+l)%l],cr=cp[j],nx=cp[(j+1)%l];np.push({x:0.25*pv.x+0.5*cr.x+0.25*nx.x,y:0.25*pv.y+0.5*cr.y+0.25*nx.y});}cp=np;}return cp;}
+        function pointsToSVGPath(p){if(p.length===0)return"";let d=`M ${p[0].x.toFixed(1)} ${p[0].y.toFixed(1)}`;for(let i=1;i<p.length;i++)d+=` L ${p[i].x.toFixed(1)} ${p[i].y.toFixed(1)}`;d+=" Z";return d;}
+
+        window.downloadFile = (url, name) => { const a = document.createElement('a'); a.href=url; a.download=name; a.click(); };
+        window.downloadText = (txt, name) => { const blob = new Blob([decodeURIComponent(txt)], {type:"image/svg+xml"}); const url = URL.createObjectURL(blob); downloadFile(url, name); };
+    </script>
+</body>
+</html>
